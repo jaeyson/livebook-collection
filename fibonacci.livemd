@@ -1,0 +1,92 @@
+# Comparisons of diff versions of fibonacci
+
+## Install dependencies
+
+```elixir
+Mix.install([
+  {:benchee, "~> 1.1"},
+  {:stream_data, "~> 0.5.0"}
+])
+```
+
+## Implementation
+
+```elixir
+defmodule Fibonacci do
+  @spec own_implementation(n :: integer) :: list(integer)
+  def own_implementation(n), do: Enum.reverse(fib_do(n))
+
+  @spec fib_do(n :: integer) :: list(integer)
+  defp fib_do(0), do: [0]
+  defp fib_do(1), do: [1 | fib_do(0)]
+  defp fib_do(n) when n > 1, do: fib_do(n, fib_do(1))
+
+  @spec fib_do(n :: integer, list :: list(integer)) :: list(integer)
+  defp fib_do(1, list), do: list
+
+  defp fib_do(n, list) do
+    [x, y | _] = list
+    fib_do(n - 1, [x + y | list])
+  end
+
+  @spec fibonacci_stratus(n :: integer) :: list(integer)
+  def fibonacci_stratus(n), do: Enum.reverse(stratus(n))
+
+  @spec stratus(n :: integer) :: list(integer)
+  defp stratus(0), do: [0]
+  defp stratus(1), do: [1 | stratus(0)]
+
+  defp stratus(n) when n > 1 do
+    [x, y | _] = all = stratus(n - 1)
+    [x + y | all]
+  end
+
+  @spec fibonacci_pragdave(n :: integer) :: list(integer)
+  def fibonacci_pragdave(n), do: Enum.map(0..n, &pragdave/1)
+
+  @spec pragdave(n :: integer) :: integer
+  defp pragdave(0), do: 0
+  defp pragdave(1), do: 1
+  defp pragdave(n), do: pragdave(n - 1) + pragdave(n - 2)
+
+  @spec fibonacci_rosetta(n :: integer) :: list(integer)
+  def fibonacci_rosetta(n), do: Enum.map(0..n, &rosetta/1)
+
+  @spec rosetta(n :: integer) :: integer
+  defp rosetta(0), do: 0
+  defp rosetta(1), do: 1
+  defp rosetta(n), do: rosetta(0, 1, n - 2)
+
+  @spec rosetta(integer, integer, integer) :: integer
+  defp rosetta(_, prv, -1), do: prv
+
+  defp rosetta(prvprv, prv, n) do
+    next = prv + prvprv
+    rosetta(prv, next, n - 1)
+  end
+end
+```
+
+## Benchmark
+
+```elixir
+gen_int_input = fn integer ->
+  StreamData.integer(1..integer)
+  |> Enum.take(integer)
+  |> Enum.random()
+end
+
+Benchee.run(
+  %{
+    "Rosetta" => fn int -> Fibonacci.fibonacci_rosetta(int) end,
+    "Pragdave" => fn int -> Fibonacci.fibonacci_pragdave(int) end,
+    "Stratus3d" => fn int -> Fibonacci.fibonacci_stratus(int) end,
+    "Own implementation" => fn int -> Fibonacci.own_implementation(int) end
+  },
+  before_each: fn _ -> gen_int_input.(20) end,
+  time: 5,
+  memory_time: 2,
+  warmup: 4,
+  formatters: [Benchee.Formatters.Console]
+)
+```
