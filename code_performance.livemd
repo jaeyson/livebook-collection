@@ -1,0 +1,146 @@
+# Code Performance
+
+source: [https://blog.appsignal.com/2023/09/28/how-to-reduce-reductions-in-elixir.html](https://blog.appsignal.com/2023/09/28/how-to-reduce-reductions-in-elixir.html)
+
+```elixir
+Appsignal.instrument("slow", fn ->
+  :timer.sleep(1000)
+end)
+```
+
+```elixir
+mix profile.eprof -e "(1..1_000) |> Enum.each(fn _ -> Appsignal.Instrumentation.instrument(\"name\", \"category\", fn -> :ok end) end)"
+```
+
+```elixir
+(1..1_000)
+|> Enum.each(fn _ ->
+  Appsignal.Instrumentation.instrument(\"name\", \"category\", fn -> :ok end)
+end)
+```
+
+```bash
+# This report sample has been redacted for brevity
+
+Profile results of #PID<0.315.0>
+#                                                        CALLS     %  TIME µS/CALL
+Total                                                    11701 100.0 53586    0.46
+:application.get_env/2                                    4000  0.90   484    0.12
+:ets.lookup/2                                             6000  7.62  4083    0.68
+Appsignal.Nif._create_root_span/1                         1000 13.82  7404    7.40
+Appsignal.Nif._close_span/1                               1000 29.76 15947   15.95
+```
+
+```elixir
+  def instrument(name, category, fun) do
+    instrument(fn span ->
+      _ =
+        span
+        |> @span.set_name(name)
+        |> @span.set_attribute("appsignal:category", category)
+
+      call_with_optional_argument(fun, span)
+    end)
+  end
+```
+
+```elixir
+def set_name(%Span{reference: reference} = span, name)
+    when is_reference(reference) and is_binary(name) do
+  if Config.active?() do
+    :ok = @nif.set_span_name(reference, name)
+    span
+  end
+end
+```
+
+```sh
+:ets.lookup/2                                             4000  5.06  2458    0.61
+Appsignal.Nif._create_root_span/1                         1000 16.30  7922    7.92
+Appsignal.Nif._close_span/1                               1000 32.91 16001   16.00
+```
+
+```elixir
+  def active? do
+    :appsignal
+    |> Application.get_env(:config, @default_config)
+    |> do_active?
+  end
+
+  defp do_active?(%{active: true}), do: valid?()
+  defp do_active?(_), do: false
+  def valid? do
+    do_valid?(Application.get_env(:appsignal, :config)[:push_api_key])
+  end
+
+  defp do_valid?(push_api_key) when is_binary(push_api_key) do
+    !empty?(String.trim(push_api_key))
+  end
+
+  defp do_valid?(_push_api_key), do: false
+```
+
+```elixir
+  def active? do
+    :appsignal
+    |> Application.get_env(:config, @default_config)
+    |> active?
+  end
+
+  defp active?(%{active: true} = config) do
+    valid?(config)
+  end
+
+  defp active?(_config), do: false
+
+  def valid? do
+    :appsignal
+    |> Application.get_env(:config)
+    |> valid?
+  end
+
+  defp valid?(%{push_api_key: key}) when is_binary(key) do
+    !(key
+      |> String.trim()
+      |> empty?())
+  end
+
+  defp valid?(_config), do: false
+```
+
+```sh
+:erlang.whereis/1                                         4000  1.88   757    0.19
+Appsignal.Nif._set_span_attribute_string/3                1000  1.90   766    0.77
+Appsignal.Tracer.create_span/3                            1000  2.02   813    0.81
+Process.whereis/1                                         4000  2.17   875    0.22
+Appsignal.Tracer.running?/0                               4000  2.30   926    0.23
+:ets.lookup/2                                             3001  3.91  1576    0.53
+Appsignal.Nif._create_root_span/1                         1000 17.12  6903    6.90
+Appsignal.Nif._close_span/1                               1000 33.97 13696   13.70
+```
+
+```elixir
+def lookup(pid) do
+  if running?(), do: :ets.lookup(@table, pid)
+end
+```
+
+```elixir
+def lookup(pid) do
+  try do
+    :ets.lookup(@table, pid)
+  rescue
+    ArgumentError -> []
+  end
+end
+```
+
+## The Final Profile
+
+To summarise, we utilized `profile.eprof` to locate and reduce _7n_ unnecessary calls, including:
+
+- Calls to `:ets.lookup/2` from _6n_ to _3n_
+- All _4n_ calls to `Appsignal.Tracer.running`
+
+This resulted in a small but significant improvement in our instrument function's performance.
+

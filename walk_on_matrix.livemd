@@ -1,0 +1,75 @@
+# Walk on matrix
+
+## implementation
+
+<!-- livebook:{"reevaluate_automatically":true} -->
+
+```elixir
+defmodule WalkOnMatrix do
+  def start([rows]) when length(rows) < 2, do: rows
+
+  def start([first_row | remaining_rows]) do
+    first_row = reverse_row(first_row, [])
+
+    remaining_rows
+    |> sort([], first_row)
+    |> reverse_row([])
+  end
+
+  defp sort([], [], sorted_row), do: sorted_row
+
+  defp sort([head | tail], unsorted_rows, sorted_row) when tail === [] do
+    [last_elem | rest] = segregate_last_elem(head, [])
+    sorted_row = [last_elem | sorted_row]
+    sorted_row = add_to_sorted(rest, sorted_row)
+
+    sort(unsorted_rows, [], sorted_row)
+  end
+
+  defp sort([head | tail], unsorted_rows, sorted_row) do
+    [last_elem | rest] = segregate_last_elem(head, [])
+    sorted_row = [last_elem | sorted_row]
+    unsorted_rows = [rest | unsorted_rows]
+
+    sort(tail, unsorted_rows, sorted_row)
+  end
+
+  defp add_to_sorted([], sorted), do: sorted
+
+  defp add_to_sorted([head | tail], sorted) do
+    add_to_sorted(tail, [head | sorted])
+  end
+
+  defp reverse_row([], reversed_row), do: reversed_row
+
+  defp reverse_row([head | tail], reversed_row) do
+    reverse_row(tail, [head | reversed_row])
+  end
+
+  defp segregate_last_elem([head | tail], unsorted_row)
+       when tail === [],
+       do: [head | unsorted_row]
+
+  defp segregate_last_elem([head | tail], unsorted_row) do
+    segregate_last_elem(tail, [head | unsorted_row])
+  end
+end
+
+input = [
+  [11, 12, 13, 14, 15],
+  [24, 25, 26, 27, 16],
+  [23, 30, 29, 28, 17],
+  [22, 21, 20, 19, 18]
+]
+
+two_elem = [
+  [1, 2, 3, 4, 5],
+  [10, 9, 8, 7, 6]
+]
+
+one_elem = [
+  [1, 2, 3, 4, 5]
+]
+
+WalkOnMatrix.start(one_elem)
+```

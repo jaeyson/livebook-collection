@@ -1,0 +1,44 @@
+# Extract dominant colors from image
+
+```elixir
+Mix.install([
+  {:kino, "~> 0.11"},
+  {:dominant_colors, "~> 0.1"}
+])
+```
+
+## Extract colors
+
+```elixir
+path = "/path/to/image.ext"
+image = File.read!(path)
+image_type = :jpg
+Kino.Image.new(content, image_type)
+```
+
+```elixir
+{:ok, colors} = DominantColors.dominant_colors(path)
+
+styles = fn color ->
+  [
+    {"justify-content", "center"},
+    {"align-items", "center"},
+    {"color", "#ffffff"},
+    {"display", "flex"},
+    {"width", "250px"},
+    {"height", "25px"},
+    {"background-color", color},
+    {"margin", "1px"}
+  ]
+  |> Enum.map(fn {k, v} -> k <> ": " <> v <> ";" end)
+  |> Enum.join(" ")
+end
+
+html =
+  Enum.map(colors, fn color ->
+    "<div style=\"#{styles.(color)}\">#{color}</div>"
+  end)
+  |> Enum.join()
+
+Kino.HTML.new(html)
+
