@@ -1,0 +1,25 @@
+services:
+  rabbitmq:
+    image: docker.io/rabbitmq:3.13.3-management
+    container_name: rabbitmq
+    # environment:
+    #   RABBITMQ_DEFAULT_USER: user
+    #   RABBITMQ_DEFAULT_PASS: password
+    ports:
+      - "5675:5672"
+      - "15675:15672"
+  # WIP: livebook couldn't connect to other ports
+  # e.g when connecting to rabbitmq port 5675
+  # livebook:
+  #   image: ghcr.io/livebook-dev/livebook:0.12.1 # set Elixir version before v1.17 due to rabbit_common error
+  #   container_name: livebook
+  #   environment:
+  #     LIVEBOOK_PASSWORD: livebook1234
+  #     LIVEBOOK_HOME: /livebook
+  #     LIVEBOOK_DEFAULT_RUNTIME: standalone
+  #   working_dir: '/livebook'
+  #   volumes:
+  #     - ./:/livebook
+  #   ports:
+  #     - "8080:8080"
+  #     - "8081:8081"
