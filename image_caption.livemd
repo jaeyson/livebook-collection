@@ -1,0 +1,119 @@
+# Image caption
+
+```elixir
+Mix.install(
+  [
+    {:instructor, "~> 0.0.5"},
+    {:ecto, "~> 3.11"}
+  ],
+  config: [
+    instructor: [
+      adapter: Instructor.Adapters.OpenAI,
+      openai: [
+        api_key: System.fetch_env!("OPENAI_API_KEY"),
+        http_options: [receive_timeout: 60_000, connect_options: [protocols: [:http2]]]
+      ]
+    ]
+  ]
+)
+```
+
+## Section
+
+```elixir
+defmodule ContentHelpers do
+  def image_message(image_path, detail \\ "low")
+      when is_binary(image_path) and (detail == "low" or detail == "high") do
+    image_b64 = image_path |> File.read!() |> Base.encode64()
+    image_data = "data:image/jpg;base64," <> image_b64
+    %{type: "image_url", image_url: %{url: image_data, detail: detail}}
+  end
+
+  def system_message do
+    %{
+      role: "system",
+      content: """
+        You are an expert at providing an image description for assistive technology and SEO benefits.
+        
+        The image is included in an online article titled "The Hidden Gems of Urban Street Art."
+        
+        The article aims to showcase the vibrant and often overlooked artworks that adorn
+        the nooks and crannies around the city of Toronto Canada.
+        
+        You generate text for two purposes:
+        - an HTML img alt text
+        - an HTML figure, figcaption text
+        
+        ## Alt text format
+        Briefly describe the contents of the image where the context is focusing on the urban street art.
+        Be concise and limit the description to 125 characters or less.
+        
+        Example alt text:
+        > A vibrant phoenix graffiti with blazing orange, red, and gold colors on the side of a brick building in an urban setting.
+        
+        ## figcaption format
+        Image caption descriptions should focus on the urban artwork, providing a description of the appearance,
+        style, street address if available, and how it relates to the surroundings. Be concise.
+        
+        Example caption text:
+        > A vibrant phoenix graffiti on a brick building at Queen St W and Spadina Ave. With wings outstretched, the mural's blazing oranges, reds, and golds contrast sharply against the red brick backdrop. Passersby pause to observe, integrating the artwork into the urban landscape.
+      """
+    }
+  end
+
+  def user_message(extra_image_info) do
+    %{
+      role: "user",
+      content: """
+        Provide the descriptions for the image. Incorporate relevant information from the following additional details if applicable:
+
+        #{extra_image_info}
+
+        Output in the following JSON format:
+
+        {
+          "alt": "generated alt text",
+          "figcaption": "generation caption text"
+        }
+      """
+    }
+  end
+end
+
+defmodule ImageCaptioner do
+  use Ecto.Schema
+  use Instructor.Validator
+
+  embedded_schema do
+    field(:alt_tag, :string)
+    field(:figcaption, :string)
+  end
+
+  @impl true
+  def validate_changeset(changeset) do
+    changeset
+    |> Ecto.Changeset.validate_length(:alt_tag, less_than_or_equal_to: 125)
+    |> Ecto.Changeset.validate_length(:alt_tag, less_than_or_equal_to: 250)
+  end
+end
+
+image_path = "./scott-webb-DcNlJK7kLkk-unsplash.jpg"
+
+Instructor.chat_completion(
+  model: "gpt-4o",
+  response_model: ImageCaptioner,
+  max_retries: 3,
+  messages: [
+    ContentHelpers.system_message(),
+    ContentHelpers.user_message("image of urban art mural on underpass at 507 King St E"),
+    %{role: "user", content: [ContentHelpers.image_message(image_path)]}
+  ]
+)
+
+# {:ok,
+#  %ImageCaptioner{
+#    id: "1",
+#    alt_tag: "A colorful mural of a face with large, vivid eyes and full lips on an underpass at 507 King St E.",
+#    figcaption: "A colorful mural depicting a face with striking eyes and full lips, located on the underpass at 507 King St E. The vibrant greens, yellows, and purples of the artwork bring life to the concrete structure, with the facial features seamlessly integrated into the urban landscape. Pedestrians walk by, adding a sense of scale and immersion to the scene."
+#  }}
+```
