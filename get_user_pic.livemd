@@ -1,0 +1,40 @@
+# Grab a user image from Microsoft Graph
+
+```elixir
+Mix.install([
+  {:req, "~> 0.5.7"},
+  {:kino, "~> 0.14.2"}
+])
+```
+
+## Grab a user image from Microsoft Graph
+
+```elixir
+name = "chgeuer@microsoft.com"
+  
+get_access_token_cmd = "az account get-access-token --resource-type ms-graph"
+
+{json_response, 0} =
+  System.cmd("cmd.exe", ["/c #{get_access_token_cmd}"])
+
+access_token = :json.decode(json_response)["accessToken"]
+
+response =
+  Req.new(
+    method: :get,
+    url: "https://graph.microsoft.com/v1.0/users/{name}/photo/$value",
+    path_params_style: :curly, 
+    path_params: [name: name],
+    auth: {:bearer, access_token}
+  )
+  |> Req.request!()
+  |> case do
+    %Req.Response{status: 200, headers: %{"content-type" => [_mime_type]}, body: image_bytes} ->
+      image_bytes
+
+    %Req.Response{status: 404, body: %{"error" => %{"code" => code}}}
+      when code in ["ErrorEntityNotFound", "ImageNotFound"] ->
+      {:error, :not_found}
+  end
+ ```
+
