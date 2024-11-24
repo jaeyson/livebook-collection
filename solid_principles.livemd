@@ -1,0 +1,294 @@
+# Bringing SOLID to Elixir
+
+## Single Responsibility Principle
+
+It states that **a class or module should have only one reason to change**, meaning that a class should have only **one responsibility** or perform **one function** within a program.
+
+```elixir
+# BAD
+defmodule User do
+  defstruct [:name, :email]
+end
+
+defmodule UserBusinessLogic do
+  def save_to_database(%User{name: name}) do
+    # Code to save user information to the database
+  end
+
+  def send_welcome_email(%User{email: email}) do
+    # Code to send a welcome email
+  end
+
+  def delete_user_account(%User{} = user) do
+    # Code to delete user
+  end
+end
+```
+
+```elixir
+# GOOD
+defmodule UserRepository do
+  def save_to_database(%User{name: name}) do
+    # Code to save user information to the database
+  end
+end
+
+defmodule WelcomeEmailService do
+  def call(%User{email: email}) do
+    # Code to send a welcome email
+  end
+end
+
+defmodule DeleteUserService do
+  def call(%User{} = user) do
+    # Code to delete user
+  end
+end
+```
+
+## Open/Closed Principle
+
+It states that **modules should be open for extension but closed for modification**.
+
+```elixir
+# BAD
+defmodule DiscountCalculator do
+  def calculate(user_type, price) do
+    case user_type do
+      :regular -> price
+      :premium -> price * 0.9
+      :student -> price * 0.8
+      _ -> price
+    end
+  end
+end
+```
+
+```elixir
+# GOOD
+
+# DEFINING BEHAVIOUR
+defmodule Discount do
+  @callback calculate(float()) :: float()
+end
+
+# IMPLEMENTING calculate/1 for each user type
+defmodule RegularUser do
+  @behaviour Discount
+
+  def calculate(price), do: price
+end
+
+defmodule PremiumUser do
+  @behaviour Discount
+
+  def calculate(price), do: price * 0.9
+end
+
+defmodule StudentUser do
+  @behaviour Discount
+
+  def calculate(price), do: price * 0.8
+end
+
+defmodule VIPUser do
+  @behaviour Discount
+
+  def calculate(price), do: price * 0.7
+end
+```
+
+```elixir
+defmodule DiscountCalculator do
+  def calculate(user_module, price) when is_atom(user_module) do
+    user_module.calculate(price)
+  end
+end
+```
+
+## Liskov Substitution Principle
+
+It states that **objects of a superclass should be replaceable with objects of a subclass without affecting the correctness of the program**.
+
+> Where you have a variable that's of the base type you should be able to switch in any of the `subclass` types without having an undesirable effect on your system.
+
+```elixir
+defmodule Notification do
+  @callback send(String.t()) :: :ok | {:error, String.t()}
+end
+
+defmodule EmailNotification do
+  @behaviour Notification
+
+  def send(message) do
+    # Simulate sending an email notification
+    :ok
+  end
+end
+
+defmodule SMSNotification do
+  @behaviour Notification
+
+  def send(message) do
+    # Simulate sending an SMS notification
+    :ok
+  end
+end
+```
+
+```elixir
+defmodule NotificationService do
+  def notify(notification_module, message) when is_atom(notification_module) do
+    notification_module.send(message)
+  end
+end
+
+defmodule SMSNotification do
+  @behaviour Notification
+
+  def send(message) when is_binary(message) and byte_size(message) <= 160 do
+    # Simulate sending an SMS notification
+    :ok
+  end
+
+  def send(_message) do
+    {:error, "Message is too long for SMS notification"}
+  end
+
+```
+
+This can lead to a violation of LSP when used interchangeably with `EmailNotification`. When we substitute `SMSNotification` for `EmailNotification`, it is expected that the `notify/2` function can call `send/1` on any notification type without needing to check specifics.
+
+However, `SMSNotification` introduces a limitation (message length) that breaks this expectation. The `send/1` function in `SMSNotification` behaves differently than expected by the client of the Notification behavior. If the message length exceeds 160 characters, it results in an error, which may not be handled gracefully in the same way as an email notification.
+
+We can identify violation here, because the `SMSNotification` cannot be used interchangeably with the `EmailNotification` without additional checks, it violates the **Liskov Substitution Principle**.
+
+Any code that assumes both notifications can be used interchangeably would not function correctly when it encounters a message that doesn't meet the `SMSNotification` requirements.
+
+This demonstrates the important stuff of designing subclasses (or implementations) in a way that maintains expected behaviors to ensure correct substitutability. To resolve such issues, we should find some trade offs, either unify the message constraints across all notifications or ensure that clients are aware of the constraints for specific types.
+
+## Interface Segregation
+
+It states that **no client should be forced to depend on methods it does not use**. In other words, interfaces should be small and specific to the needs of the clients that use them, rather than large and general-purpose.
+
+```elixir
+# BAD
+defmodule Vehicle do
+  @callback drive() :: :ok
+  @callback fly() :: :ok
+  @callback sail() :: :ok
+end
+
+defmodule Car do
+  @behaviour Vehicle
+
+  @impl Vehicle
+  def drive() do
+    IO.puts("Driving a car.")
+    :ok
+  end
+
+  @impl Vehicle
+  def fly() do
+    :ok
+  end
+
+  @impl Vehicle
+  def sail() do
+    :ok
+  end
+end
+
+defmodule Boat do
+  @behaviour Vehicle
+
+  @impl Vehicle
+  def drive() do
+    :ok
+  end
+
+  @impl Vehicle
+  def fly() do
+    :ok
+  end
+
+  @impl Vehicle
+  def sail() do
+    IO.puts("Sailing a boat.")
+    :ok
+  end
+end
+```
+
+```elixir
+# GOOD
+defmodule Drivable do
+  @callback drive() :: :ok
+end
+
+defmodule Flyable do
+  @callback fly() :: :ok
+end
+
+defmodule Sailable do
+  @callback sail() :: :ok
+end
+
+defmodule Car do
+  @behaviour Drivable
+
+  @impl Drivable
+  def drive() do
+    IO.puts("Driving a car.")
+    :ok
+  end
+end
+
+defmodule Boat do
+  @behaviour Sailable
+
+  @impl Sailable
+  def sail() do
+    IO.puts("Sailing a boat.")
+    :ok
+  end
+end
+```
+
+## Dependency Inversion
+
+In general, it states that: **High-level modules should not depend on low-level modules. Both should depend on abstractions. Abstractions should not depend on details. Details should depend on abstractions**.
+
+```elixir
+defmodule NotificationSender do
+  @callback send_notification(String.t()) :: :ok | {:error, String.t()}
+end
+
+defmodule EmailNotification do
+  @behaviour NotificationSender
+
+  @impl NotificationSender
+  def send_notification(message) do
+    IO.puts("Sending email: #{message}")
+    :ok
+  end
+end
+
+defmodule SMSNotification do
+  @behaviour NotificationSender
+
+  @impl NotificationSender
+  def send_notification(message) do
+    IO.puts("Sending SMS: #{message}")
+    :ok
+  end
+end
+
+defmodule NotificationService do
+  @notification_sender Application.get_env(:your_app, :notification_sender)
+
+  def notify(message) do
+    @notification_sender.send_notification(message)
+  end
+end
+```

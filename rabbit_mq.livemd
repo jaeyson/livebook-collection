@@ -4,7 +4,7 @@
 # Tutorial: https://mkumm.com/posts/first-hops-with-rabbitmq
 # TODO: amqp can't install on Elixir v1.17
 Mix.install([
-  {:amqp, "~> 3.3"}
+  {:amqp, "~> 4.0"}
 ])
 ```
 
@@ -12,7 +12,7 @@ Mix.install([
 
 ```elixir
 options = [host: "localhost", port: 5675, virtual_host: "/", username: "guest", password: "guest"]
-{:ok, connection} = AMQP.Connection.open(optionshttps://mkumm.com/posts/first-hops-with-rabbitmq/#feedback)
+{:ok, connection} = AMQP.Connection.open(options)
 {:ok, channel} = AMQP.Channel.open(connection)
 ```
 
